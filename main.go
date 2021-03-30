@@ -15,7 +15,7 @@ import (
 
 func clear() routing.Handler {
 	return func(c *routing.Context) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://carts-db:27017"))
@@ -25,14 +25,13 @@ func clear() routing.Handler {
 			}
 		}()
 
-		collection := client.Database("cart").Collection("data")
+		collection := client.Database("data").Collection("cart")
 
 		if err = collection.Drop(ctx); err != nil {
 			return fmt.Errorf("expected collection.Drop returns nil err; got err = %w", err)
 		}
 
-		fmt.Println("cleared")
-		return nil
+		return c.Write("cleared")
 	}
 }
 
@@ -52,7 +51,7 @@ func seed() routing.Handler {
 			numSeed = num
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
 		client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://carts-db:27017"))
@@ -62,7 +61,7 @@ func seed() routing.Handler {
 			}
 		}()
 
-		collection := client.Database("cart").Collection("data")
+		collection := client.Database("data").Collection("cart")
 
 		var documents []interface{}
 		for i := 0; i < numSeed; i++ {
@@ -79,8 +78,7 @@ func seed() routing.Handler {
 			return fmt.Errorf("expected collection.InsertMany returns nil err; got err = %w", err)
 		}
 
-		fmt.Printf("inserted %d documents", numSeed)
-		return nil
+		return c.Write(fmt.Sprintf("inserted %d documents", numSeed))
 	}
 }
 
