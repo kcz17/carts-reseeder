@@ -13,6 +13,41 @@ import (
 	"time"
 )
 
+func main() {
+	router := routing.New()
+	router.Get("/db/", count())
+	router.Put("/db", seed())
+	router.Put("/db/<num:\\d+>", seed())
+	router.Delete("/db", clear())
+
+	if err := fasthttp.ListenAndServe(":8079", router.HandleRequest); err != nil {
+		panic(fmt.Errorf("expected fasthttp.ListenAndServe() returns nil err; got err = %w", err))
+	}
+}
+
+func count() routing.Handler {
+	return func(c *routing.Context) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://carts-db:27017"))
+		defer func() {
+			if err = client.Disconnect(ctx); err != nil {
+				panic(err)
+			}
+		}()
+
+		collection := client.Database("data").Collection("cart")
+
+		count, err := collection.CountDocuments(ctx, nil, nil)
+		if err != nil {
+			return fmt.Errorf("expected collection.CountDocuments returns nil err; got err = %w", err)
+		}
+
+		return c.Write(count)
+	}
+}
+
 func clear() routing.Handler {
 	return func(c *routing.Context) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -79,16 +114,5 @@ func seed() routing.Handler {
 		}
 
 		return c.Write(fmt.Sprintf("inserted %d documents", numSeed))
-	}
-}
-
-func main() {
-	router := routing.New()
-	router.Put("/db", seed())
-	router.Put("/db/<num:\\d+>", seed())
-	router.Delete("/db", clear())
-
-	if err := fasthttp.ListenAndServe(":8079", router.HandleRequest); err != nil {
-		panic(fmt.Errorf("expected fasthttp.ListenAndServe() returns nil err; got err = %w", err))
 	}
 }
