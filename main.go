@@ -9,10 +9,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"strconv"
 	"time"
 )
 
-func reseed() routing.Handler {
+func clear() routing.Handler {
 	return func(c *routing.Context) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -26,8 +27,45 @@ func reseed() routing.Handler {
 
 		collection := client.Database("cart").Collection("data")
 
+		if err = collection.Drop(ctx); err != nil {
+			return fmt.Errorf("expected collection.Drop returns nil err; got err = %w", err)
+		}
+
+		fmt.Println("cleared")
+		return nil
+	}
+}
+
+func seed() routing.Handler {
+	return func(c *routing.Context) error {
+		numSeed := 100000
+		if len(c.Param("num")) > 0 {
+			num, err := strconv.Atoi(c.Param("num"))
+			if err != nil {
+				return fmt.Errorf("could not convert num param = %s to integer; err = %w", c.Param("num"), err)
+			}
+
+			if num <= 0 {
+				return fmt.Errorf("num must be greater than 0; got num = %d", num)
+			}
+
+			numSeed = num
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://carts-db:27017"))
+		defer func() {
+			if err = client.Disconnect(ctx); err != nil {
+				panic(err)
+			}
+		}()
+
+		collection := client.Database("cart").Collection("data")
+
 		var documents []interface{}
-		for i := 0; i < 100000; i++ {
+		for i := 0; i < numSeed; i++ {
 			json := fmt.Sprintf(`{"_class":"works.weave.socks.cart.entities.Cart","customerId":"%s","items":[]}`, uuid.New().String())
 			var doc interface{}
 			if err := bson.UnmarshalExtJSON([]byte(json), true, &doc); err != nil {
@@ -41,14 +79,16 @@ func reseed() routing.Handler {
 			return fmt.Errorf("expected collection.InsertMany returns nil err; got err = %w", err)
 		}
 
-		fmt.Println("inserted")
+		fmt.Printf("inserted %d documents", numSeed)
 		return nil
 	}
 }
 
 func main() {
 	router := routing.New()
-	router.Post("/mode", reseed())
+	router.Put("/db", seed())
+	router.Put("/db/<num:\\d+>", seed())
+	router.Delete("/db", clear())
 
 	if err := fasthttp.ListenAndServe(":8079", router.HandleRequest); err != nil {
 		panic(fmt.Errorf("expected fasthttp.ListenAndServe() returns nil err; got err = %w", err))
