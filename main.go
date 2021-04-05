@@ -15,7 +15,7 @@ import (
 
 func main() {
 	router := routing.New()
-	router.Get("/db/", count())
+	router.Get("/db", count())
 	router.Put("/db", seed())
 	router.Put("/db/<num:\\d+>", seed())
 	router.Delete("/db", clear())
@@ -39,7 +39,7 @@ func count() routing.Handler {
 
 		collection := client.Database("data").Collection("cart")
 
-		count, err := collection.CountDocuments(ctx, nil, nil)
+		count, err := collection.CountDocuments(ctx, bson.D{}, nil)
 		if err != nil {
 			return fmt.Errorf("expected collection.CountDocuments returns nil err; got err = %w", err)
 		}
